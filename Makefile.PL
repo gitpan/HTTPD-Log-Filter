@@ -6,7 +6,7 @@ WriteMakefile(
     'EXE_FILES'         => [ 'exclude_robots' ],
     'VERSION_FROM'      => 'lib/HTTPD/Log/Filter.pm',
     'PREREQ_PM'		=> {
-        LWP::Simple => undef,
-        Getopt::Long => undef,
+        IO::File        => undef,
+        IO::Zlib        => undef,
     },
 );

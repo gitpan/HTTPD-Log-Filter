@@ -16,6 +16,7 @@ use warnings;
 #------------------------------------------------------------------------------
 
 use IO::File;
+use IO::Zlib;
 
 my $fields_order = {
     CLF => [ qw(
@@ -207,7 +208,7 @@ my @options = qw(
 
 use vars qw( $VERSION );
 
-$VERSION = '1.06';
+$VERSION = '1.07';
 
 #------------------------------------------------------------------------------
 #
@@ -230,7 +231,8 @@ sub new
     die "format option should be $format_options_re\n" 
         if $args{format} and $args{format} !~ /^$format_options_re$/
     ;
-    $self->{format} = delete $args{format} || 'UNSPECIFIED';
+    $self->{required_format} = delete $args{format} || 'UNSPECIFIED';
+    $self->{format} = $self->{required_format};
     $self->{capture} = delete( $args{capture} );
     $self->{regexes} = \%args;
     $self->create_regexes( $self->{format} );
@@ -362,11 +364,22 @@ sub detect_format
 
     if ( $args{filename} )
     {
-        open( FH, $args{filename} ) or die "Can't open $args{filename}\n";
-        $args{line} = <FH>;
-        close( FH );
+        my $fh;
+        if ( $args{filename} =~ /\.gz$/ )
+        {
+            $fh = IO::Zlib->new( $args{filename}, "rb" ) 
+                or die "Can't open $args{filename}\n"
+            ;
+        }
+        else
+        {
+            $fh = IO::File->new( $args{filename} ) 
+                or die "Can't open $args{filename}\n"
+            ;
+        }
+        $args{line} = <$fh>;
     }
-    die "detect_format expexts either a filename or a line from a logfile"
+    die "detect_format expects either a filename or a line from a logfile"
         unless $args{line}
     ;
     for ( @format_options )
@@ -386,7 +399,9 @@ sub filter
     my $line = shift;
 
     my @captured;
-    $self->detect_format( line => $line ) if $self->{format} eq 'UNSPECIFIED';
+    $self->detect_format( line => $line ) 
+        if $self->{required_format} eq 'UNSPECIFIED'
+    ;
     @captured = $self->check_generic_re( $line );
     return undef unless @captured;
     if ( $self->{capture} )
@@ -528,12 +543,38 @@ where %j is .* in regex-speak.
 See L<http://httpd.apache.org/docs/mod/mod_log_config.html> for more
 information on log file formats.
 
+=item SQUID
+
+Logging format for Squid (v1.1+) caching / proxy servers. This is of the form:
+
+"%9d.%03d %6d %s %s/%03d %d %s %s %s %s%s/%s %s"
+
+where the fields are:
+
+    time 
+    elapsed 
+    remotehost 
+    code_status 
+    bytes 
+    method 
+    url 
+    rfc931
+    peerstatus_peerhost 
+    type
+
+
+(see L<http://www.squid-cache.org/Doc/FAQ/FAQ-6.html> for more info).
+
 =back
 
 =item (host|ident|authexclude|date|request|status|bytes|referer|agent)_re
 
 This class of options specifies the regular expression or expressions which are
-used to filter the 
+used to filter the logfile for httpd logs.
+
+=item (time|elapsed|remotehost|code_status|method|url|rfc931|peerstatus_peerhost|type)_re
+
+Ditto for Squid logs.
 
 =item capture [ <fieldname1>, <fieldname2>, ... ]
 

@@ -20,3 +20,6 @@ Revision history for Perl extension exclude_robots.
 
 1.06  Tue Jun 19 10:01:10 BST 2001
         - bug fixes; added capture & filter; added format method
+
+1.07  Tue Jun 19 17:15:11 BST 2001
+        - added support for .gz files in detect_format
