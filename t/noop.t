@@ -18,8 +18,15 @@ eval {
     while ( <LOG> )
     {
         my $line = $filter->filter( $_ );
-        die "Invalid entry at line $.\n" unless defined $line;
-        print OUT $line if $line;
+        if ( $line )
+        {
+            print OUT $line;
+        }
+        else
+        {
+            die "Invalid entry at line $.:\n$_\n", $filter->re, "\n",
+            $filter->generic_re, "\n";
+        }
     }
     close( LOG );
     close( OUT );

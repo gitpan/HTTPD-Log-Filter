@@ -19,56 +19,185 @@ use IO::File;
 
 my $fields_order = {
     CLF => [ qw(
-        host_re
-        ident_re
-        authexclude_re
-        date_re
-        request_re
-        status_re
-        bytes_re
+        host
+        ident
+        authexclude
+        date
+        request
+        status
+        bytes
     ) ],
     ELF => [ qw(
-        host_re
-        ident_re
-        authexclude_re
-        date_re
-        request_re
-        status_re
-        bytes_re
-        referer_re
-        agent_re
+        host
+        ident
+        authexclude
+        date
+        request
+        status
+        bytes
+        referer
+        agent
+    ) ],
+    SQUID => [ qw(
+        time 
+        elapsed 
+        remotehost 
+        code_status 
+        bytes 
+        method 
+        url 
+        rfc931
+        peerstatus_peerhost 
+        type
+    ) ],
+    UNSPECIFIED => [ qw(
+        host
+        ident
+        authexclude
+        date
+        request
+        status
+        bytes
+        referer
+        agent
+        junk
     ) ],
     XLF => [ qw(
-        host_re
-        ident_re
-        authexclude_re
-        date_re
-        request_re
-        status_re
-        bytes_re
-        referer_re
-        agent_re
+        host
+        ident
+        authexclude
+        date
+        request
+        status
+        bytes
+        referer
+        agent
         junk
     ) ],
 };
 
-my %in_quotes = map { $_ => 1 } qw(
-    request_re
-    referer_re
-    agent_re
+my @format_options = grep !/^UNSPECIFIED$/, keys %{$fields_order};
+my $format_options_re = '(' . join( '|', @format_options ) . ')';
+
+my %in_braces = map { $_ => 1 } qw(
+    date
 );
 
+my %in_quotes = map { $_ => 1 } qw(
+    request
+    referer
+    agent
+);
+
+my $squid_status = '(?:' . join( '|', qw(
+    TCP_HIT
+    TCP_MISS
+    TCP_REFRESH_HIT
+    TCP_REF_FAIL_HIT
+    TCP_REFRESH_MISS
+    TCP_CLIENT_REFRESH_MISS
+    TCP_IMS_HIT
+    TCP_SWAPFAIL_MISS
+    TCP_NEGATIVE_HIT
+    TCP_MEM_HIT
+    TCP_DENIED
+    TCP_OFFLINE_HIT
+    UDP_HIT
+    UDP_MISS
+    UDP_DENIED
+    UDP_INVALID
+    UDP_MISS_NOFETCH
+    NONE
+    ERR_.*?
+    TCP_CLIENT_REFRESH
+    TCP_SWAPFAIL
+    TCP_IMS_MISS
+    UDP_HIT_OBJ
+    UDP_RELOADING
+) ) . ')';
+
+my @http_methods = qw(
+    GET
+    HEAD
+    POST
+    PUT
+    DELETE
+    TRACE
+    OPTIONS
+    CONNECT
+);
+
+my @rfc2518_methods = qw(
+    PROPFIND
+    PROPATCH
+    MKCOL
+    MOVE
+    COPY
+    LOCK
+    UNLOCK
+);
+
+my $methods_re = '(?:' . join( '|', @http_methods, @rfc2518_methods ) . ')';
+
+my @squid_methods = (
+    'ICP_QUERY',
+    'PURGE',
+    @http_methods,
+    @rfc2518_methods
+);
+
+my @heirarchy_codes = qw(
+    NONE
+    DIRECT
+    SIBLING_HIT
+    PARENT_HIT
+    DEFAULT_PARENT
+    SINGLE_PARENT
+    FIRST_UP_PARENT
+    NO_PARENT_DIRECT
+    FIRST_PARENT_MISS
+    CLOSEST_PARENT_MISS
+    CLOSEST_PARENT
+    CLOSEST_DIRECT
+    NO_DIRECT_FAIL
+    SOURCE_FASTEST
+    ROUNDROBIN_PARENT
+    CACHE_DIGEST_HIT
+    CD_PARENT_HIT
+    CD_SIBLING_HIT
+    NO_CACHE_DIGEST_DIRECT
+    CARP
+    ANY_PARENT
+    INVALID CODE
+);
+
+my $hierarchy_code_re = '(?:' . join( '|', @heirarchy_codes ) . ')';
+my $squid_methods_re = '(?:' . join( '|', @squid_methods ) . ')';
+my $url_re = '.*?';
+my $host_re = '.*?';
+my $mime_type_re = '(?:-|.*?/.*?)';
+my $status_re = '\d{3}';
+
 my %generic_fields_re = (
-    host_re     => '\S+',
-    ident_re    => '\S+',
-    authexclude_re => '\S+',
-    date_re     => '\[\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2}\s[+-]\d{4}\]',
-    request_re  => '".*?"',
-    status_re   => '\d{3}',
-    bytes_re    => '(?:-|\d+)',
-    referer_re  => '".*?"',
-    agent_re    => '".*?"',
-    junk        => '.*',
+    host                => $host_re,
+    ident               => '\S+',
+    authexclude         => '\S+',
+    date                => '\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2}\s[+-]\d{4}',
+    request             => "$methods_re $url_re",
+    status              => $status_re,
+    bytes               => '(?:-|\d+)',
+    referer             => '.*?',
+    agent               => '.*?',
+    junk                => '.*',
+    'time'              => '\d+\.\d+',
+    elapsed             => '\d+',
+    remotehost          => '\S+',
+    code_status         => "$squid_status/$status_re",
+    method              => $squid_methods_re,
+    url                 => $url_re,
+    rfc931              => '.*?',
+    peerstatus_peerhost => "$hierarchy_code_re/$host_re",
+    type                => $mime_type_re,
 );
 
 my @options = qw(
@@ -78,7 +207,7 @@ my @options = qw(
 
 use vars qw( $VERSION );
 
-$VERSION = '1.02';
+$VERSION = '1.06';
 
 #------------------------------------------------------------------------------
 #
@@ -98,35 +227,113 @@ sub new
         die "can't write to $self->{exclusions_file}: $!\n" unless $self->{efh};
     }
     $self->{invert} = delete $args{invert};
-    $self->{format} = delete $args{format} || 'CLF';
-    die "format option should be (CLF|ELF|XLF)\n" 
-        unless $self->{format} =~ /^[CXE]LF$/
+    die "format option should be $format_options_re\n" 
+        if $args{format} and $args{format} !~ /^$format_options_re$/
     ;
-    my @fields_order = @{$fields_order->{$self->{format}}};
-    my %valid_fields = map { $_ => 1 }  @fields_order;
-    for ( keys %args )
+    $self->{format} = delete $args{format} || 'UNSPECIFIED';
+    $self->{capture} = delete( $args{capture} );
+    $self->{regexes} = \%args;
+    $self->create_regexes( $self->{format} );
+    return $self;
+}
+
+sub capture
+{
+    my $self = shift;
+    my $capture = shift;
+
+    if ( $capture )
+    {
+        $self->{capture} = $capture;
+        $self->create_regexes( $self->{format} );
+    }
+    return $self->{capture};
+}
+
+sub format
+{
+    my $self = shift;
+    my $format = shift;
+
+    if ( $format )
+    {
+        $self->{format} = $format;
+        $self->create_regexes( $self->{format} );
+    }
+    return $self->{format};
+}
+
+sub get_re_field
+{
+    my $field = shift;
+    my $re = shift;
+    my %capture = @_;
+
+    $re = "($re)" if $capture{$field};
+    $re = "\"$re\"" if $in_quotes{$field};
+    $re = "\\[$re\\]" if $in_braces{$field};
+    return $re;
+}
+
+sub create_regexes
+{
+    my $self = shift;
+    my $format = shift;
+
+    my @fields_order = @{$fields_order->{$format}};
+    my %fields_order = map { $_ => 1 } @fields_order;
+    my %valid_fields = map { $_  . '_re' => 1 }  @fields_order;
+    for ( keys %{$self->{regexes}} )
     {
         die 
             "$_ is not a valid option; please use one of:\n",
             map { "\t$_\n" } keys( %valid_fields ), @options,
         unless $valid_fields{$_}
     }
-    $self->{generic_fields_re} = 
-        join( '\s', map( { $generic_fields_re{$_} } @fields_order ) )
+
+    my %capture;
+
+    if ( ref( $self->{capture} ) eq 'ARRAY' )
+    {
+        for ( @{$self->{capture}} )
+        {
+            die 
+                "$_ is not a valid $format field name;",
+                "should be one of\n", 
+                map { "\t$_\n" } @fields_order
+            unless $fields_order{$_};
+        }
+        %capture = map { $_ => 1 } @{$self->{capture}};
+        $self->{capture_fields} = 
+            [ grep { $capture{$_} } @fields_order ]
+        ;
+    }
+    my @generic_fields_re = map
+        {
+            my $re = $generic_fields_re{$_};
+            $re = get_re_field( $_, $re, %capture );
+            $re;
+        } 
+        @fields_order
     ;
+    $self->{generic_fields_re} = join( '\s', @generic_fields_re ); 
     my %exclude_fields_re = ( 
         %generic_fields_re,
         map { 
-            my $re = delete( $args{$_} ); 
-            $_ => $in_quotes{$_} ? "\"$re\"" : $re 
+            my $re = $self->{regexes}{$_}; 
+            s/_re$//;
+            $_ => $re
         } 
         grep /_re$/,
-        keys %args
+        keys %{$self->{regexes}}
     );
+    %exclude_fields_re = 
+        map { $_ => get_re_field( $_, $exclude_fields_re{$_}, %capture ) } 
+        keys %exclude_fields_re
+    ;
     $self->{exclude_fields_re} = 
         join( '\s', map( { $exclude_fields_re{$_} } @fields_order ) )
     ;
-    return $self;
 }
 
 sub generic_re
@@ -141,12 +348,54 @@ sub re
     return $self->{exclude_fields_re};
 }
 
+sub check_generic_re
+{
+    my $self = shift;
+    my $line = shift;
+    return $line =~ m{^$self->{generic_fields_re}$};
+}
+
+sub detect_format
+{
+    my $self = shift;
+    my %args = @_;
+
+    if ( $args{filename} )
+    {
+        open( FH, $args{filename} ) or die "Can't open $args{filename}\n";
+        $args{line} = <FH>;
+        close( FH );
+    }
+    die "detect_format expexts either a filename or a line from a logfile"
+        unless $args{line}
+    ;
+    for ( @format_options )
+    {
+        eval { $self->create_regexes( $_ ) };
+        next if $@;
+        next unless $self->check_generic_re( $args{line} );
+        $self->{format} = $_;
+        return $self->{format};
+    }
+    die "Can't autodetect format\n";
+}
+
 sub filter
 {
     my $self = shift;
     my $line = shift;
 
-    return undef unless $line =~ m{^$self->{generic_fields_re}$};
+    my @captured;
+    $self->detect_format( line => $line ) if $self->{format} eq 'UNSPECIFIED';
+    @captured = $self->check_generic_re( $line );
+    return undef unless @captured;
+    if ( $self->{capture} )
+    {
+        my @cfields = @{$self->{capture_fields}};
+        my %captured;
+        @captured{@cfields} = @captured;
+        $self->{captured} = \%captured;
+    }
     if ( $self->{invert} )
     {
         return $line if $line !~ m{^$self->{exclude_fields_re}$};
@@ -160,6 +409,18 @@ sub filter
         $self->{efh}->print( $line );
     }
     return '';
+}
+
+sub DESTROY {}
+
+sub AUTOLOAD
+{
+    my $self = shift;
+    use vars qw( $AUTOLOAD );
+    my $field = $AUTOLOAD;
+    $field =~ s/.*:://;
+    die "$field method not defined\n" unless exists $self->{captured}{$field};
+    return $self->{captured}{$field};
 }
 
 #------------------------------------------------------------------------------
@@ -184,7 +445,27 @@ HTTPD::Log::Filter - a module to filter entries out of an httpd log.
     {
         my $ret = $hlf->filter( $_ );
         die "Error at line $.: invalid log format\n" unless defined $ret;
-        print $line if $ret;
+        print $_ if $ret;
+    }
+
+    print grep { $hlf->filter( $_ ) } <>;
+
+    $hlf = HTTPD::Log::Filter->new(
+        capture => [ qw(
+            host
+            ident
+            authexclude
+            date
+            request
+            status
+            bytes
+        ) ];
+    );
+
+    while( <> )
+    {
+        next unless $hlf->filter( $_ );
+        print $hlf->host, "\n";
     }
 
     print grep { $hlf->filter( $_ ) } <>;
@@ -254,6 +535,28 @@ information on log file formats.
 This class of options specifies the regular expression or expressions which are
 used to filter the 
 
+=item capture [ <fieldname1>, <fieldname2>, ... ]
+
+This option requests the filter to capture the contents of given named fields
+so that they can be examined if the filtering is successful. This is done by
+simply putting capturing parentheses around the appropriate segment of the
+filtering regex. Fields to be captured are passed as an array reference.
+WARNING; do not try to insert your own capturing parentheses in the custom
+field regexes, as this will have unpredictable results when combined with the
+capture option.
+
+Captured fields can be accessed after each call to filter using a method call
+with the same name as the captured field; e.g.
+
+    my $filter = HTTPD::Logs::Filter->new(
+        capture => [ 'host', 'request' ]
+    );
+    while ( <> )
+    {
+        next unless $filter->filter( $_ );
+        print $filter->host, " requested ", $filter->request, "\n";
+    }
+
 =back
 
 =head1 METHODS
@@ -271,6 +574,15 @@ the format specified in the constructor.
 =head2 re
 
 Returns the current filter regular expression.
+
+=head2 format
+
+Returns the current format.
+
+=head2 (host|ident|authexclude|date|request|status|bytes|referer|agent|junk)
+
+If the capture option has been specified, these methods return the captured
+string for each field as a result of the previous call to filter.
 
 =head1 AUTHOR
 

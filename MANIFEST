@@ -8,12 +8,15 @@ sample/access_log_clf
 sample/access_log_elf
 sample/access_log_xlf
 sample/bad_access_log
+sample/capture
 sample/exclusions_clf
 sample/exclusions_elf
 sample/exclusions_xlf
 sample/inclusions_clf
 sample/inclusions_elf
 sample/inclusions_xlf
+t/autodetect.t
+t/capture.t
 t/filter_clf.t
 t/filter_elf.t
 t/filter_xlf.t

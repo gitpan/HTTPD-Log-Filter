@@ -15,6 +15,7 @@ eval {
     my $filter = HTTPD::Log::Filter->new(
         exclusions_file     => '/tmp/exclusions_clf',
         request_re          => "GET.*?",
+        format              => "CLF",
     );
     open( LOG, 'sample/access_log_clf' ) or die $!;
     open( OUT, '>/tmp/inclusions_clf' ) or die $!;
