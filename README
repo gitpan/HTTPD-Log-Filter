@@ -1,0 +1,43 @@
+exclude_robots
+==============
+
+Description
+-----------
+
+This script filters HTTP log files to exclude entries that correspond to know
+webbots, spiders, and other undesirables. It assumes that the logs are in 
+NCSA extended/combined log format (see
+http://httpd.apache.org/docs/mod/mod_log_config.html). The script requires a
+URL as a command line option which should point to a text file containing a
+linebreak separated list of lowercase strings to match on for bots. This is
+based on the format used by ABC (http://www.abc.org.uk/exclusions/exclude.html).
+
+Prerequisites
+-------------
+
+This module requires the following perl modules:
+
+LWP::Simple
+Getopt::Long
+
+Installation
+------------
+
+The usual ...
+
+> perl Makefile.PL
+> make
+[ > make test ]
+> make install
+
+Copyright
+---------
+
+Copyright (c) 2001 Ave Wrigley. All rights reserved. This program is free
+software; you can redistribute it and/or modify it under the same terms as Perl
+itself.
+
+Author
+------
+
+Ave Wrigley <Ave.Wrigley@itn.co.uk>

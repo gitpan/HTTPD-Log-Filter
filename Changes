@@ -1,0 +1,7 @@
+Revision history for Perl extension exclude_robots.
+
+1.00  Thu May 24 18:01:13 BST 2001
+	- original version
+
+1.01  Fri May 25 17:21:22 BST 2001
+        - lots of tests and doc added
