@@ -75,6 +75,11 @@ my @options = qw(
     exclusions_file
     invert
 );
+
+use vars qw( $VERSION );
+
+$VERSION = '1.02';
+
 #------------------------------------------------------------------------------
 #
 # Constructor

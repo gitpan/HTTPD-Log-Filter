@@ -4,7 +4,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     'NAME'		=> 'HTTPD::Log::Filter',
     'EXE_FILES'         => [ 'exclude_robots' ],
-    'VERSION'     	=> '1.01',
+    'VERSION_FROM'      => 'lib/HTTPD/Log/Filter.pm',
     'PREREQ_PM'		=> {
         LWP::Simple => undef,
         Getopt::Long => undef,
