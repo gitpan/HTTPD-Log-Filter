@@ -28,3 +28,4 @@ t/format.t
 t/invalid.t
 t/load.t
 t/noop.t
+META.yml                                 Module meta-data (added by MakeMaker)

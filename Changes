@@ -23,3 +23,6 @@ Revision history for Perl extension exclude_robots.
 
 1.07  Tue Jun 19 17:15:11 BST 2001
         - added support for .gz files in detect_format
+
+1.08  Mon Apr 26 15:44:55 BST 2004
+        - fixed bug in prerequisite dependencies in Makefile.PL
